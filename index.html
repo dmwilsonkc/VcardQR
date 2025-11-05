@@ -9,7 +9,7 @@
   <!-- Tailwind (CDN) for quick, clean styling on GitHub Pages -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- QR Code generator -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" integrity="sha512-CNgI69x4WnR0BqC5QeZ8sNqvDdQx5GQkAVl8VL5aLqF3M8Jt1eX2mM8Vw1x8cK4QmCj8p8P6iYG3YQw1C4z+7Q==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <style>
     /* Improve text wrapping for long vCard content */
     textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
@@ -216,6 +216,7 @@
 
     let qrcodeInstance = null;
     function makeQR(){
+      if (!window.QRCode) throw new Error('QR library failed to load. Check your network/ad-blocker and reload.');
       const payload = getPayload();
       // Clear old
       qrContainer.innerHTML = '';
