@@ -13,6 +13,11 @@
   <style>
     /* Improve text wrapping for long vCard content */
     textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    /* Drag and drop styling */
+    .drag-over {
+      border-color: #4f46e5 !important;
+      background-color: #eef2ff !important;
+    }
   </style>
 </head>
 <body class="min-h-screen bg-slate-50 text-slate-900">
@@ -26,16 +31,18 @@
   <main class="max-w-5xl mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
     <!-- Left: Input / Options -->
     <section class="space-y-4">
-      <div class="p-4 bg-white rounded-2xl shadow-sm border border-slate-200">
+      <div id="dropZone" class="p-4 bg-white rounded-2xl shadow-sm border border-slate-200 transition-colors">
         <h2 class="text-lg font-medium mb-3">1) Add your vCard</h2>
         <div class="flex items-center gap-3 mb-3">
-          <input id="fileInput" type="file" accept=".vcf,text/vcard,text/x-vcard" class="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-slate-900 file:text-white hover:file:bg-slate-800" />
+          <input id="fileInput" type="file" accept=".vcf,.vcard,text/vcard,text/x-vcard,text/plain" class="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-slate-900 file:text-white hover:file:bg-slate-800" />
           <button id="sampleBtn" class="px-3 py-2 rounded-xl text-sm font-medium bg-slate-100 hover:bg-slate-200 border border-slate-200">Load sample</button>
         </div>
+        <p class="text-xs text-slate-500 mb-2">💡 Tip: Drag & drop a .vcf file here, or paste from clipboard below</p>
         <label for="vcardText" class="block text-sm mb-1">Or paste vCard (.vcf) text</label>
-        <textarea id="vcardText" rows="10" placeholder="BEGIN:VCARD\nVERSION:3.0\nN:Wilson;Dave;;;\nFN:Dave Wilson\nTEL;TYPE=CELL,VOICE:+1-555-123-4567\nEMAIL;TYPE=INTERNET,PREF:dave@example.org\nURL:https://example.org\nEND:VCARD" class="w-full p-3 rounded-xl border border-slate-300 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400"></textarea>
+        <textarea id="vcardText" rows="10" placeholder="BEGIN:VCARD&#10;VERSION:3.0&#10;N:Wilson;Dave;;;&#10;FN:Dave Wilson&#10;TEL;TYPE=CELL,VOICE:+1-555-123-4567&#10;EMAIL;TYPE=INTERNET,PREF:dave@example.org&#10;URL:https://example.org&#10;END:VCARD" class="w-full p-3 rounded-xl border border-slate-300 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400"></textarea>
         <div class="mt-3 flex flex-wrap items-center gap-3">
           <button id="validateBtn" class="px-4 py-2 rounded-xl font-semibold bg-emerald-600 text-white hover:bg-emerald-700">Validate</button>
+          <button id="pasteBtn" class="px-4 py-2 rounded-xl font-semibold bg-blue-600 text-white hover:bg-blue-700">Paste from Clipboard</button>
           <button id="downloadVcfBtn" class="px-4 py-2 rounded-xl font-semibold bg-slate-900 text-white hover:bg-slate-800">Download .vcf</button>
           <span id="status" class="text-sm"></span>
         </div>
@@ -48,7 +55,7 @@
             <input type="radio" name="mode" value="vcard" checked class="mt-1"> 
             <span>
               <span class="font-medium">Embed full vCard in QR (default)</span>
-              <br><span class="text-sm text-slate-600">Best when you can’t host a .vcf. If your vCard is very long (> ~3 KB), some scanners may struggle.</span>
+              <br><span class="text-sm text-slate-600">Best when you can't host a .vcf. If your vCard is very long (> ~3 KB), some scanners may struggle.</span>
             </span>
           </label>
           <label class="flex items-start gap-2">
@@ -94,6 +101,105 @@
           <button id="copyPayloadBtn" class="px-4 py-2 rounded-xl font-semibold bg-slate-100 hover:bg-slate-200 border border-slate-200">Copy encoded text</button>
         </div>
       </div>
+      <div class="p-4 bg-white rounded-2xl shadow-sm border border-slate-200">
+        <h2 class="text-lg font-medium mb-3">Or build a vCard from fields</h2>
+        <p class="text-sm text-slate-600 mb-3">Fill in what you have. We'll generate a vCard 3.0 and place it in the box above so you can tweak it before making the QR.</p>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label class="text-sm">First name
+            <input id="f_first" class="mt-1 w-full p-2 rounded-lg border border-slate-300" />
+          </label>
+          <label class="text-sm">Last name
+            <input id="f_last" class="mt-1 w-full p-2 rounded-lg border border-slate-300" />
+          </label>
+          <label class="text-sm sm:col-span-2">Title
+            <input id="f_title" class="mt-1 w-full p-2 rounded-lg border border-slate-300" />
+          </label>
+          <label class="text-sm sm:col-span-2">Company / Organisation
+            <input id="f_org" class="mt-1 w-full p-2 rounded-lg border border-slate-300" />
+          </label>
+          <label class="text-sm sm:col-span-2">Website (with http:// or https://)
+            <input id="f_url" placeholder="https://example.org" class="mt-1 w-full p-2 rounded-lg border border-slate-300" />
+          </label>
+        </div>
+
+        <hr class="my-4 border-slate-200" />
+        <h3 class="font-medium mb-2">Emails</h3>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label class="text-sm">Email (personal)
+            <input id="f_email_home" type="email" class="mt-1 w-full p-2 rounded-lg border border-slate-300" />
+          </label>
+          <label class="text-sm">Email (business)
+            <input id="f_email_work" type="email" class="mt-1 w-full p-2 rounded-lg border border-slate-300" />
+          </label>
+        </div>
+
+        <hr class="my-4 border-slate-200" />
+        <h3 class="font-medium mb-2">Phones</h3>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <label class="text-sm">Phone (personal)
+            <input id="f_tel_home" class="mt-1 w-full p-2 rounded-lg border border-slate-300" placeholder="+1-555-..." />
+          </label>
+          <label class="text-sm">Phone (mobile)
+            <input id="f_tel_cell" class="mt-1 w-full p-2 rounded-lg border border-slate-300" placeholder="+1-555-..." />
+          </label>
+          <label class="text-sm">Phone (business)
+            <input id="f_tel_work" class="mt-1 w-full p-2 rounded-lg border border-slate-300" placeholder="+1-555-..." />
+          </label>
+        </div>
+
+        <hr class="my-4 border-slate-200" />
+        <h3 class="font-medium mb-2">Work address</h3>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label class="text-sm sm:col-span-2">Street
+            <input id="f_addr_work_street" class="mt-1 w-full p-2 rounded-lg border border-slate-300" />
+          </label>
+          <label class="text-sm">City
+            <input id="f_addr_work_city" class="mt-1 w-full p-2 rounded-lg border border-slate-300" />
+          </label>
+          <label class="text-sm">State
+            <input id="f_addr_work_state" class="mt-1 w-full p-2 rounded-lg border border-slate-300" />
+          </label>
+          <label class="text-sm">ZIP
+            <input id="f_addr_work_zip" class="mt-1 w-full p-2 rounded-lg border border-slate-300" />
+          </label>
+          <label class="text-sm">Country
+            <input id="f_addr_work_country" class="mt-1 w-full p-2 rounded-lg border border-slate-300" />
+          </label>
+          <label class="text-sm sm:col-span-2">County (optional)
+            <input id="f_addr_work_county" class="mt-1 w-full p-2 rounded-lg border border-slate-300" />
+          </label>
+        </div>
+
+        <details class="mt-3">
+          <summary class="cursor-pointer select-none text-sm text-slate-700">Add a home address (optional)</summary>
+          <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label class="text-sm sm:col-span-2">Street
+              <input id="f_addr_home_street" class="mt-1 w-full p-2 rounded-lg border border-slate-300" />
+            </label>
+            <label class="text-sm">City
+              <input id="f_addr_home_city" class="mt-1 w-full p-2 rounded-lg border border-slate-300" />
+            </label>
+            <label class="text-sm">State
+              <input id="f_addr_home_state" class="mt-1 w-full p-2 rounded-lg border border-slate-300" />
+            </label>
+            <label class="text-sm">ZIP
+              <input id="f_addr_home_zip" class="mt-1 w-full p-2 rounded-lg border border-slate-300" />
+            </label>
+            <label class="text-sm">Country
+              <input id="f_addr_home_country" class="mt-1 w-full p-2 rounded-lg border border-slate-300" />
+            </label>
+            <label class="text-sm sm:col-span-2">County (optional)
+              <input id="f_addr_home_county" class="mt-1 w-full p-2 rounded-lg border border-slate-300" />
+            </label>
+          </div>
+        </details>
+
+        <div class="mt-4 flex flex-wrap items-center gap-3">
+          <button id="buildVcardBtn" class="px-4 py-2 rounded-xl font-semibold bg-teal-600 text-white hover:bg-teal-700">Create vCard from fields</button>
+          <span class="text-sm text-slate-600">This will populate the vCard box above. Then click <em>Generate QR</em>.</span>
+        </div>
+      </div>
     </section>
 
     <!-- Right: QR Output -->
@@ -105,7 +211,7 @@
         <button id="downloadSvgBtn" class="px-4 py-2 rounded-xl font-semibold bg-slate-100 hover:bg-slate-200 border border-slate-200">Download SVG</button>
         <button id="clearBtn" class="px-4 py-2 rounded-xl font-semibold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100">Clear</button>
       </div>
-      <p class="mt-3 text-sm text-slate-600">Tip: Print this QR on cards, banners, or handbills. Many phone cameras will offer “Add Contact” directly from the scan.</p>
+      <p class="mt-3 text-sm text-slate-600">Tip: Print this QR on cards, banners, or handbills. Many phone cameras will offer "Add Contact" directly from the scan.</p>
     </section>
   </main>
 
@@ -119,6 +225,7 @@
     const fileInput = document.getElementById('fileInput');
     const sampleBtn = document.getElementById('sampleBtn');
     const validateBtn = document.getElementById('validateBtn');
+    const pasteBtn = document.getElementById('pasteBtn');
     const statusEl = document.getElementById('status');
     const urlInput = document.getElementById('urlInput');
     const modeRadios = [...document.querySelectorAll('input[name="mode"]')];
@@ -131,6 +238,7 @@
     const downloadSvgBtn = document.getElementById('downloadSvgBtn');
     const downloadVcfBtn = document.getElementById('downloadVcfBtn');
     const clearBtn = document.getElementById('clearBtn');
+    const dropZone = document.getElementById('dropZone');
 
     // Toggle URL input visibility based on mode
     function refreshModeUI() {
@@ -149,13 +257,101 @@
       status('Loaded sample vCard.');
     });
 
-    // Read .vcf file
+    // Paste from clipboard button
+    pasteBtn.addEventListener('click', async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (!text) {
+          alert('Clipboard is empty.');
+          return;
+        }
+        processVcardText(text, 'Pasted from clipboard');
+      } catch (err) {
+        console.error(err);
+        alert('Could not read from clipboard. Make sure you\'ve granted permission.');
+      }
+    });
+
+    // Drag and drop functionality
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+      dropZone.addEventListener(eventName, preventDefaults, false);
+    });
+
+    function preventDefaults(e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+      dropZone.addEventListener(eventName, () => {
+        dropZone.classList.add('drag-over');
+      }, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+      dropZone.addEventListener(eventName, () => {
+        dropZone.classList.remove('drag-over');
+      }, false);
+    });
+
+    dropZone.addEventListener('drop', async (e) => {
+      const dt = e.dataTransfer;
+      const files = dt.files;
+      
+      if (files.length > 0) {
+        await handleFile(files[0]);
+      }
+    }, false);
+
+    // Process vCard text (normalize and validate)
+    function processVcardText(text, source) {
+      try {
+        // Normalize CRLFs, trim, and take first vCard block if multiple exist
+        text = String(text).replace(/\r\n?/g, '\n').trim();
+        const m = text.match(/BEGIN:VCARD[\s\S]*?END:VCARD/i);
+        if (m) text = m[0].trim();
+
+        if (!/BEGIN:VCARD/i.test(text) || !/END:VCARD/i.test(text)) {
+          throw new Error('This does not look like a vCard (.vcf).');
+        }
+
+        vcardText.value = text;
+        status(source || 'vCard loaded.');
+      } catch (err) {
+        console.error(err);
+        alert(`Could not process vCard: ${err.message || err}`);
+      }
+    }
+
+    // Handle file upload
+    async function handleFile(file) {
+      if (!file) return;
+      
+      let text = '';
+      try {
+        if (typeof file.text === 'function') {
+          text = await file.text();
+        } else {
+          // Safari/older fallback
+          text = await new Promise((resolve, reject) => {
+            const fr = new FileReader();
+            fr.onload = () => resolve(String(fr.result || ''));
+            fr.onerror = () => reject(fr.error || new Error('Failed to read file'));
+            fr.readAsText(file);
+          });
+        }
+
+        processVcardText(text, `Loaded file: ${file.name} (${file.size} bytes)`);
+      } catch (err) {
+        console.error(err);
+        alert(`Could not read that file: ${err.message || err}`);
+      }
+    }
+
+    // Read .vcf file from file input
     fileInput.addEventListener('change', async (e) => {
       const file = e.target.files?.[0];
-      if (!file) return;
-      const text = await file.text();
-      vcardText.value = text.trim();
-      status(`Loaded file: ${file.name}`);
+      await handleFile(file);
     });
 
     // Simple vCard validation
@@ -359,6 +555,97 @@
     function status(msg){
       statusEl.textContent = msg;
       statusEl.className = 'text-sm text-slate-600';
+    }
+
+    // Build vCard from form fields
+    function escV(s){
+      return (s || '')
+        .replace(/\\/g, '\\\\')
+        .replace(/\n/g, '\\n')
+        .replace(/,/g, '\\,')
+        .replace(/;/g, '\\;');
+    }
+    
+    function normalizeUrl(u){
+      const s = (u || '').trim();
+      if (!s) return '';
+      if (/^https?:\/\//i.test(s)) return s;
+      return 'http://' + s;
+    }
+    
+    function hasAny(values){
+      return values.some(v => (v || '').trim().length > 0);
+    }
+    
+    function buildADR(type, street, city, state, zip, country, county){
+      // ADR: PO Box;EXT;Street;City;Region;ZIP;Country
+      // Place county in EXT (2nd component) for lack of a dedicated slot.
+      if (!hasAny([street, city, state, zip, country, county])) return '';
+      const parts = ['','', escV(street), escV(city), escV(state), escV(zip), escV(country)];
+      if (county) parts[1] = escV(county + ' County');
+      return `ADR;TYPE=${type}:${parts.join(';')}`;
+    }
+    
+    function buildVcardFromForm(){
+      const first = document.getElementById('f_first').value;
+      const last = document.getElementById('f_last').value;
+      const title = document.getElementById('f_title').value;
+      const org = document.getElementById('f_org').value;
+      const url = normalizeUrl(document.getElementById('f_url').value);
+
+      const emailHome = document.getElementById('f_email_home').value;
+      const emailWork = document.getElementById('f_email_work').value;
+
+      const telHome = document.getElementById('f_tel_home').value;
+      const telCell = document.getElementById('f_tel_cell').value;
+      const telWork = document.getElementById('f_tel_work').value;
+
+      const wa_street = document.getElementById('f_addr_work_street').value;
+      const wa_city = document.getElementById('f_addr_work_city').value;
+      const wa_state = document.getElementById('f_addr_work_state').value;
+      const wa_zip = document.getElementById('f_addr_work_zip').value;
+      const wa_country = document.getElementById('f_addr_work_country').value;
+      const wa_county = document.getElementById('f_addr_work_county').value;
+
+      const ha_street = document.getElementById('f_addr_home_street')?.value || '';
+      const ha_city = document.getElementById('f_addr_home_city')?.value || '';
+      const ha_state = document.getElementById('f_addr_home_state')?.value || '';
+      const ha_zip = document.getElementById('f_addr_home_zip')?.value || '';
+      const ha_country = document.getElementById('f_addr_home_country')?.value || '';
+      const ha_county = document.getElementById('f_addr_home_county')?.value || '';
+
+      const lines = [];
+      lines.push('BEGIN:VCARD');
+      lines.push('VERSION:3.0');
+      lines.push(`N:${escV(last)};${escV(first)};;;`);
+      const fn = [first, last].filter(Boolean).join(' ').trim();
+      if (fn) lines.push(`FN:${escV(fn)}`);
+      if (org) lines.push(`ORG:${escV(org)}`);
+      if (title) lines.push(`TITLE:${escV(title)}`);
+      if (emailHome) lines.push(`EMAIL;TYPE=INTERNET,HOME:${escV(emailHome)}`);
+      if (emailWork) lines.push(`EMAIL;TYPE=INTERNET,WORK:${escV(emailWork)}`);
+      if (telHome) lines.push(`TEL;TYPE=HOME,VOICE:${escV(telHome)}`);
+      if (telCell) lines.push(`TEL;TYPE=CELL,VOICE:${escV(telCell)}`);
+      if (telWork) lines.push(`TEL;TYPE=WORK,VOICE:${escV(telWork)}`);
+      if (url) lines.push(`URL:${escV(url)}`);
+
+      const adrWork = buildADR('WORK', wa_street, wa_city, wa_state, wa_zip, wa_country, wa_county);
+      const adrHome = buildADR('HOME', ha_street, ha_city, ha_state, ha_zip, ha_country, ha_county);
+      if (adrWork) lines.push(adrWork);
+      if (adrHome) lines.push(adrHome);
+
+      lines.push('END:VCARD');
+      const text = lines.join('\n');
+      vcardText.value = text;
+      status('vCard built. Review above, then Generate QR.');
+      return text;
+    }
+
+    const buildVcardBtn = document.getElementById('buildVcardBtn');
+    if (buildVcardBtn) {
+      buildVcardBtn.addEventListener('click', () => {
+        buildVcardFromForm();
+      });
     }
 
     // Initialize
