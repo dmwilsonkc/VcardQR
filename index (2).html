@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>vCard → QR Code</title>
+  <meta name="description" content="Client‑side tool to convert a .vcf (vCard) into a scannable QR code. Runs entirely in your browser." />
+  <link rel="icon" href="data:," />
+  <!-- Tailwind (CDN) for quick, clean styling on GitHub Pages -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- QR Code generator -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" integrity="sha512-CNgI69x4WnR0BqC5QeZ8sNqvDdQx5GQkAVl8VL5aLqF3M8Jt1eX2mM8Vw1x8cK4QmCj8p8P6iYG3YQw1C4z+7Q==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <style>
+    /* Improve text wrapping for long vCard content */
+    textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-900">
+  <header class="sticky top-0 z-10 bg-white/80 backdrop-blur border-b border-slate-200">
+    <div class="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
+      <h1 class="text-xl sm:text-2xl font-semibold">vCard → QR Code</h1>
+      <a href="https://github.com/" target="_blank" rel="noopener" class="text-sm underline decoration-dotted">Fork on GitHub</a>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <!-- Left: Input / Options -->
+    <section class="space-y-4">
+      <div class="p-4 bg-white rounded-2xl shadow-sm border border-slate-200">
+        <h2 class="text-lg font-medium mb-3">1) Add your vCard</h2>
+        <div class="flex items-center gap-3 mb-3">
+          <input id="fileInput" type="file" accept=".vcf,text/vcard,text/x-vcard" class="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-slate-900 file:text-white hover:file:bg-slate-800" />
+          <button id="sampleBtn" class="px-3 py-2 rounded-xl text-sm font-medium bg-slate-100 hover:bg-slate-200 border border-slate-200">Load sample</button>
+        </div>
+        <label for="vcardText" class="block text-sm mb-1">Or paste vCard (.vcf) text</label>
+        <textarea id="vcardText" rows="10" placeholder="BEGIN:VCARD\nVERSION:3.0\nN:Wilson;Dave;;;\nFN:Dave Wilson\nTEL;TYPE=CELL,VOICE:+1-555-123-4567\nEMAIL;TYPE=INTERNET,PREF:dave@example.org\nURL:https://example.org\nEND:VCARD" class="w-full p-3 rounded-xl border border-slate-300 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400"></textarea>
+        <div class="mt-3 flex flex-wrap items-center gap-3">
+          <button id="validateBtn" class="px-4 py-2 rounded-xl font-semibold bg-emerald-600 text-white hover:bg-emerald-700">Validate</button>
+          <button id="downloadVcfBtn" class="px-4 py-2 rounded-xl font-semibold bg-slate-900 text-white hover:bg-slate-800">Download .vcf</button>
+          <span id="status" class="text-sm"></span>
+        </div>
+      </div>
+
+      <div class="p-4 bg-white rounded-2xl shadow-sm border border-slate-200">
+        <h2 class="text-lg font-medium mb-3">2) Encoding options</h2>
+        <fieldset class="space-y-3">
+          <label class="flex items-start gap-2">
+            <input type="radio" name="mode" value="vcard" checked class="mt-1"> 
+            <span>
+              <span class="font-medium">Embed full vCard in QR (default)</span>
+              <br><span class="text-sm text-slate-600">Best when you can’t host a .vcf. If your vCard is very long (> ~3 KB), some scanners may struggle.</span>
+            </span>
+          </label>
+          <label class="flex items-start gap-2">
+            <input type="radio" name="mode" value="mecard" class="mt-1"> 
+            <span>
+              <span class="font-medium">Convert to MECARD (compact)</span>
+              <br><span class="text-sm text-slate-600">Smaller payload for better scan reliability (only common fields are included).</span>
+            </span>
+          </label>
+          <label class="flex items-start gap-2">
+            <input type="radio" name="mode" value="url" class="mt-1"> 
+            <span>
+              <span class="font-medium">Encode a URL to your hosted .vcf</span>
+              <br><span class="text-sm text-slate-600">Paste a link to a .vcf you host (recommended for large cards).</span>
+            </span>
+          </label>
+          <input id="urlInput" type="url" placeholder="https://your-domain.com/contact.vcf" class="w-full p-2 rounded-lg border border-slate-300 hidden" />
+        </fieldset>
+
+        <div class="mt-4 grid grid-cols-2 gap-3">
+          <label class="text-sm">QR version
+            <select id="qrVersion" class="mt-1 w-full p-2 rounded-lg border border-slate-300">
+              <option value="0" selected>Auto</option>
+              <option value="5">5 (small)</option>
+              <option value="10">10</option>
+              <option value="20">20</option>
+              <option value="30">30</option>
+              <option value="40">40 (largest)</option>
+            </select>
+          </label>
+          <label class="text-sm">Error correction
+            <select id="qrEcc" class="mt-1 w-full p-2 rounded-lg border border-slate-300">
+              <option value="L">L (7%)</option>
+              <option value="M" selected>M (15%)</option>
+              <option value="Q">Q (25%)</option>
+              <option value="H">H (30%)</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="mt-4 flex flex-wrap items-center gap-3">
+          <button id="generateBtn" class="px-4 py-2 rounded-xl font-semibold bg-indigo-600 text-white hover:bg-indigo-700">Generate QR</button>
+          <button id="copyPayloadBtn" class="px-4 py-2 rounded-xl font-semibold bg-slate-100 hover:bg-slate-200 border border-slate-200">Copy encoded text</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right: QR Output -->
+    <section class="p-4 bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col">
+      <h2 class="text-lg font-medium mb-3">3) Your QR Code</h2>
+      <div id="qr" class="mx-auto p-4 bg-slate-100 rounded-xl border border-slate-200"></div>
+      <div class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <button id="downloadPngBtn" class="px-4 py-2 rounded-xl font-semibold bg-slate-900 text-white hover:bg-slate-800">Download PNG</button>
+        <button id="downloadSvgBtn" class="px-4 py-2 rounded-xl font-semibold bg-slate-100 hover:bg-slate-200 border border-slate-200">Download SVG</button>
+        <button id="clearBtn" class="px-4 py-2 rounded-xl font-semibold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100">Clear</button>
+      </div>
+      <p class="mt-3 text-sm text-slate-600">Tip: Print this QR on cards, banners, or handbills. Many phone cameras will offer “Add Contact” directly from the scan.</p>
+    </section>
+  </main>
+
+  <footer class="max-w-5xl mx-auto px-4 pb-10 text-center text-sm text-slate-500">
+    <hr class="my-6 border-slate-200" />
+    <p>All processing happens locally in your browser. No data leaves this page.</p>
+  </footer>
+
+  <script>
+    const vcardText = document.getElementById('vcardText');
+    const fileInput = document.getElementById('fileInput');
+    const sampleBtn = document.getElementById('sampleBtn');
+    const validateBtn = document.getElementById('validateBtn');
+    const statusEl = document.getElementById('status');
+    const urlInput = document.getElementById('urlInput');
+    const modeRadios = [...document.querySelectorAll('input[name="mode"]')];
+    const qrVersion = document.getElementById('qrVersion');
+    const qrEcc = document.getElementById('qrEcc');
+    const generateBtn = document.getElementById('generateBtn');
+    const copyPayloadBtn = document.getElementById('copyPayloadBtn');
+    const qrContainer = document.getElementById('qr');
+    const downloadPngBtn = document.getElementById('downloadPngBtn');
+    const downloadSvgBtn = document.getElementById('downloadSvgBtn');
+    const downloadVcfBtn = document.getElementById('downloadVcfBtn');
+    const clearBtn = document.getElementById('clearBtn');
+
+    // Toggle URL input visibility based on mode
+    function refreshModeUI() {
+      const mode = getMode();
+      urlInput.classList.toggle('hidden', mode !== 'url');
+    }
+    modeRadios.forEach(r => r.addEventListener('change', refreshModeUI));
+
+    function getMode(){
+      return modeRadios.find(r => r.checked)?.value || 'vcard';
+    }
+
+    // Load sample vCard
+    sampleBtn.addEventListener('click', () => {
+      vcardText.value = `BEGIN:VCARD\nVERSION:3.0\nN:Wilson;Dave;;;\nFN:Dave Wilson\nORG:Mid-America Carpenters Regional Council\nTITLE:Union Representative\nTEL;TYPE=CELL,VOICE:+1-555-123-4567\nEMAIL;TYPE=INTERNET,PREF:dave.wilson@example.org\nURL:https://example.org\nADR;TYPE=WORK:;;123 Main St;Kansas City;MO;64106;USA\nNOTE:Serving Jackson County, MO — Union contractor liaison.\nEND:VCARD`;
+      status('Loaded sample vCard.');
+    });
+
+    // Read .vcf file
+    fileInput.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const text = await file.text();
+      vcardText.value = text.trim();
+      status(`Loaded file: ${file.name}`);
+    });
+
+    // Simple vCard validation
+    validateBtn.addEventListener('click', () => {
+      const ok = isValidVcard(vcardText.value);
+      status(ok ? '✅ vCard looks valid.' : '⚠️ Could not find BEGIN:VCARD / END:VCARD.');
+    });
+
+    function isValidVcard(text){
+      const t = (text || '').trim();
+      return /BEGIN:VCARD/i.test(t) && /END:VCARD/i.test(t);
+    }
+
+    // Convert vCard → MECARD (basic/common fields only)
+    function vcardToMeCard(text){
+      const get = (regex) => (text.match(regex)?.[1] || '').replace(/\\n/g, ' ').trim();
+      // Grab common fields (case-insensitive)
+      const FN = get(/\nFN:(.*)/i) || get(/\nN:(.*)/i).split(';').slice(0,2).reverse().join(' ');
+      const ORG = get(/\nORG:(.*)/i);
+      const TEL = get(/\nTEL[^:]*:(.*)/i);
+      const EMAIL = get(/\nEMAIL[^:]*:(.*)/i);
+      const URL = get(/\nURL:(.*)/i);
+      const ADRraw = get(/\nADR[^:]*:(.*)/i); // PO Box;EXT;Street;City;Region;ZIP;Country
+      let ADR = '';
+      if (ADRraw) {
+        const parts = ADRraw.split(';');
+        const street = [parts[2], parts[1]].filter(Boolean).join(' ');
+        const city = parts[3] || '';
+        const region = parts[4] || '';
+        const zip = parts[5] || '';
+        ADR = [street, city, region, zip].filter(Boolean).join(', ');
+      }
+      const esc = (s) => (s || '').replace(/;/g, '\\;').replace(/:/g, '\\:').replace(/,/g, '\\,');
+      let me = 'MECARD:';
+      if (FN) me += `N:${esc(FN)};`;
+      if (TEL) me += `TEL:${esc(TEL)};`;
+      if (EMAIL) me += `EMAIL:${esc(EMAIL)};`;
+      if (ORG) me += `ORG:${esc(ORG)};`;
+      if (URL) me += `URL:${esc(URL)};`;
+      if (ADR) me += `ADR:${esc(ADR)};`;
+      me += ';';
+      return me;
+    }
+
+    function getPayload(){
+      const mode = getMode();
+      if (mode === 'url') {
+        const url = (urlInput.value || '').trim();
+        if (!/^https?:\/\//i.test(url)) throw new Error('Please enter a valid https:// URL to your .vcf');
+        return url;
+      }
+      const text = (vcardText.value || '').trim();
+      if (!text) throw new Error('Please paste a vCard or choose a .vcf file.');
+      if (!isValidVcard(text)) throw new Error('Your vCard is missing BEGIN:VCARD / END:VCARD.');
+      if (mode === 'mecard') return vcardToMeCard('\n' + text.replace(/\r/g, '') + '\n');
+      return text; // full vCard
+    }
+
+    let qrcodeInstance = null;
+    function makeQR(){
+      const payload = getPayload();
+      // Clear old
+      qrContainer.innerHTML = '';
+      const eccMap = {L: QRCode.CorrectLevel.L, M: QRCode.CorrectLevel.M, Q: QRCode.CorrectLevel.Q, H: QRCode.CorrectLevel.H};
+      const version = parseInt(qrVersion.value, 10) || 0;
+      const correctLevel = eccMap[qrEcc.value] || QRCode.CorrectLevel.M;
+      qrcodeInstance = new QRCode(qrContainer, {
+        text: payload,
+        width: 512,
+        height: 512,
+        correctLevel,
+      });
+      // Force version if requested (qrcodejs picks automatically; we can re-render if version specified)
+      if (version !== 0) {
+        try {
+          qrcodeInstance._htOption.version = version;
+          qrcodeInstance.makeCode(payload);
+        } catch (e) {
+          console.warn('Version override failed; falling back to auto.', e);
+        }
+      }
+      return payload;
+    }
+
+    generateBtn.addEventListener('click', () => {
+      try {
+        const payload = makeQR();
+        status(`QR generated (${new Blob([payload]).size} bytes).`);
+      } catch (e) {
+        alert(e.message);
+      }
+    });
+
+    copyPayloadBtn.addEventListener('click', async () => {
+      try {
+        const payload = getPayload();
+        await navigator.clipboard.writeText(payload);
+        status('Encoded text copied to clipboard.');
+      } catch (e) {
+        alert(e.message);
+      }
+    });
+
+    downloadPngBtn.addEventListener('click', () => {
+      const canvas = qrContainer.querySelector('canvas');
+      const img = qrContainer.querySelector('img');
+      let dataURL = null;
+      if (canvas) {
+        dataURL = canvas.toDataURL('image/png');
+      } else if (img) {
+        // Some environments render to <img>. Draw to a canvas for export.
+        const c = document.createElement('canvas');
+        c.width = img.naturalWidth || 512;
+        c.height = img.naturalHeight || 512;
+        const ctx = c.getContext('2d');
+        ctx.drawImage(img, 0, 0, c.width, c.height);
+        dataURL = c.toDataURL('image/png');
+      }
+      if (!dataURL) return alert('Please generate a QR code first.');
+      downloadDataURL(dataURL, 'vcard-qr.png');
+    });
+
+    // Create a minimalist SVG export (vector) by redrawing from the canvas pixels
+    downloadSvgBtn.addEventListener('click', () => {
+      const canvas = qrContainer.querySelector('canvas');
+      if (!canvas) return alert('Please generate a QR code first.');
+      const size = canvas.width;
+      const ctx = canvas.getContext('2d');
+      const imgData = ctx.getImageData(0, 0, size, size).data;
+      const cell = getModuleSizeFromCanvas(canvas) || 4; // fallback cell size
+      const blocks = [];
+      for (let y = 0; y < size; y += cell) {
+        for (let x = 0; x < size; x += cell) {
+          // sample center pixel
+          const cx = Math.min(x + Math.floor(cell/2), size-1);
+          const cy = Math.min(y + Math.floor(cell/2), size-1);
+          const idx = (cy * size + cx) * 4;
+          const isDark = imgData[idx] < 128; // crude threshold
+          if (isDark) blocks.push(`<rect x="${x}" y="${y}" width="${cell}" height="${cell}"/>`);
+        }
+      }
+      const svg = `<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><g fill="#000">${blocks.join('')}</g></svg>`;
+      const blob = new Blob([svg], {type: 'image/svg+xml'});
+      const url = URL.createObjectURL(blob);
+      triggerDownload(url, 'vcard-qr.svg');
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    });
+
+    function getModuleSizeFromCanvas(canvas){
+      // Heuristic: scan from left until first dark pixel, assume quiet zone of 4 modules
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width, h = canvas.height;
+      const data = ctx.getImageData(0, 0, w, h).data;
+      // find first dark pixel horizontally in middle row
+      const y = Math.floor(h/2);
+      let x = 0;
+      while (x < w) {
+        const idx = (y * w + x) * 4;
+        const v = data[idx];
+        if (v < 128) break;
+        x++;
+      }
+      if (x === w) return null;
+      // count contiguous dark module width
+      let start = x;
+      while (x < w) {
+        const idx = (y * w + x) * 4;
+        if (data[idx] >= 128) break;
+        x++;
+      }
+      return Math.max(1, x - start);
+    }
+
+    downloadVcfBtn.addEventListener('click', () => {
+      const text = (vcardText.value || '').trim();
+      if (!text) return alert('Paste a vCard first.');
+      const blob = new Blob([text], { type: 'text/vcard' });
+      const url = URL.createObjectURL(blob);
+      triggerDownload(url, 'contact.vcf');
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    });
+
+    clearBtn.addEventListener('click', () => {
+      qrContainer.innerHTML = '';
+      status('Cleared.');
+    });
+
+    function triggerDownload(url, filename){
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; a.rel = 'noopener';
+      document.body.appendChild(a); a.click(); a.remove();
+    }
+
+    function downloadDataURL(dataURL, filename){
+      const a = document.createElement('a');
+      a.href = dataURL; a.download = filename; a.rel = 'noopener';
+      document.body.appendChild(a); a.click(); a.remove();
+    }
+
+    function status(msg){
+      statusEl.textContent = msg;
+      statusEl.className = 'text-sm text-slate-600';
+    }
+
+    // Initialize
+    refreshModeUI();
+  </script>
+</body>
+</html>
